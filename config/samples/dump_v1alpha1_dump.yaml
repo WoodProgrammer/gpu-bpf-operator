@@ -1,0 +1,10 @@
+apiVersion: dump.kubexdp.io/v1alpha1
+kind: Dump
+metadata:
+  labels:
+    app.kubernetes.io/name: kubexdp
+    app.kubernetes.io/managed-by: kustomize
+  name: dump-sample
+spec:
+  foo: hede
+  # TODO(user): Add fields here
