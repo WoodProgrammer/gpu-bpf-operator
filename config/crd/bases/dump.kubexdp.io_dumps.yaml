@@ -39,13 +39,21 @@ spec:
           spec:
             description: DumpSpec defines the desired state of Dump.
             properties:
-              foo:
+              schedule:
                 description: Foo is an example field of Dump. Edit dump_types.go to
                   remove/update
+                type: string
+              tcpFilter:
                 type: string
             type: object
           status:
             description: DumpStatus defines the observed state of Dump.
+            properties:
+              observedGeneration:
+                description: ObservedGeneration reflects the generation of the most
+                  recently observed Dump.
+                format: int64
+                type: integer
             type: object
         type: object
     served: true

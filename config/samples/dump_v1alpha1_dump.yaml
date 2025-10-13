@@ -6,5 +6,6 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: dump-sample
 spec:
-  foo: hede
+  schedule: "5 4 * * *"
+  tcpFilter: port 80
   # TODO(user): Add fields here

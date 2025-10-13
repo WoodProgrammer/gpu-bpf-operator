@@ -29,13 +29,18 @@ type DumpSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of Dump. Edit dump_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Schedule  string `json:"schedule,omitempty"`
+	TcpFilter string `json:"tcpFilter,omitempty"`
 }
 
 // DumpStatus defines the observed state of Dump.
 type DumpStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// ObservedGeneration reflects the generation of the most recently observed Dump.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 // +kubebuilder:object:root=true
