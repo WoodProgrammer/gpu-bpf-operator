@@ -81,7 +81,8 @@ func (r *DumpReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	}
 
 	// Check if object is being deleted (has deletion timestamp)
-	if !dump.ObjectMeta.DeletionTimestamp.IsZero() {
+	timestamp := dump.ObjectMeta.DeletionTimestamp
+	if !timestamp.IsZero() {
 		log.Info("DELETE event detected (finalizer)", "name", dump.Name, "namespace", dump.Namespace)
 		// Delete associated CronJob
 		cronJob := &batchv1.CronJob{}
