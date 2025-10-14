@@ -4,8 +4,15 @@ metadata:
   labels:
     app.kubernetes.io/name: kubexdp
     app.kubernetes.io/managed-by: kustomize
-  name: dump-sample
+  name: dump-sample-new-test
 spec:
   schedule: "5 4 * * *"
   tcpFilter: port 80
+  targetPods:
+  - key: app
+    value: backend
+    namespace: default
+  - key: app
+    value: frontend
+    namespace: default
   # TODO(user): Add fields here

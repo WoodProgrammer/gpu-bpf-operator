@@ -43,6 +43,17 @@ spec:
                 description: Foo is an example field of Dump. Edit dump_types.go to
                   remove/update
                 type: string
+              targetPods:
+                items:
+                  properties:
+                    key:
+                      type: string
+                    namespace:
+                      type: string
+                    value:
+                      type: string
+                  type: object
+                type: array
               tcpFilter:
                 type: string
             type: object

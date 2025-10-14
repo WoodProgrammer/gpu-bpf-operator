@@ -29,8 +29,15 @@ type DumpSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 
 	// Foo is an example field of Dump. Edit dump_types.go to remove/update
-	Schedule  string `json:"schedule,omitempty"`
-	TcpFilter string `json:"tcpFilter,omitempty"`
+	Schedule   string         `json:"schedule,omitempty"`
+	TcpFilter  string         `json:"tcpFilter,omitempty"`
+	TargetPods []TargetPodMap `json:"targetPods,omitempty"`
+}
+
+type TargetPodMap struct {
+	Namespace string `json:"namespace,omitempty"`
+	Key       string `json:"key,omitempty"`
+	Value     string `json:"value,omitempty"`
 }
 
 // DumpStatus defines the observed state of Dump.
