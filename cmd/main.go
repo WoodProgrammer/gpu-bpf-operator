@@ -39,6 +39,7 @@ import (
 
 	dumpv1alpha1 "github.com/WoodProgrammer/kubexdp-operator/api/v1alpha1"
 	"github.com/WoodProgrammer/kubexdp-operator/internal/controller"
+	webhookv1alpha1 "github.com/WoodProgrammer/kubexdp-operator/internal/webhook/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -208,6 +209,13 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Dump")
 		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookv1alpha1.SetupDumpWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Dump")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 
