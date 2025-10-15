@@ -18,9 +18,13 @@ package v1alpha1
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -88,9 +92,22 @@ var _ webhook.CustomValidator = &DumpCustomValidator{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type Dump.
 func (v *DumpCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
+	var allErrs field.ErrorList
+
 	dump, ok := obj.(*dumpv1alpha1.Dump)
 	if !ok {
 		return nil, fmt.Errorf("expected a Dump object but got %T", obj)
+	}
+
+	if dump.Spec.Schedule == "* * * * *" {
+		err := errors.New("the frequency error on schedule definition of dump objects")
+		allErrs = append(allErrs, field.Invalid(nil, dump.Spec.Schedule, err.Error()))
+
+		dumplog.Info("Validation error", "name", dump.GetName())
+
+		return nil, apierrors.NewInvalid(
+			schema.GroupKind{Group: "dump.kubexdp.io/v1alpha1", Kind: "Dump"},
+			dump.Name, allErrs)
 	}
 	dumplog.Info("Validation for Dump upon creation", "name", dump.GetName())
 
