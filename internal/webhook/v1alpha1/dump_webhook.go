@@ -110,9 +110,6 @@ func (v *DumpCustomValidator) ValidateCreate(_ context.Context, obj runtime.Obje
 			dump.Name, allErrs)
 	}
 	dumplog.Info("Validation for Dump upon creation", "name", dump.GetName())
-
-	// TODO(user): fill in your validation logic upon object creation.
-
 	return nil, nil
 }
 
