@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 
 	dumpv1alpha1 "github.com/WoodProgrammer/kubexdp-operator/api/v1alpha1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -115,7 +116,11 @@ func (r *DumpReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			// CronJob doesn't exist, create it
-			cronJob = r.constructCronJob(dump)
+			cronJob, err := r.constructCronJob(ctx, dump)
+			if err != nil {
+				log.Error(err, "Error while creating construct r.constructCronJob()")
+				return ctrl.Result{}, err
+			}
 			if err := controllerutil.SetControllerReference(dump, cronJob, r.Scheme); err != nil {
 				log.Error(err, "Failed to set controller reference")
 				return ctrl.Result{}, err
@@ -144,7 +149,28 @@ func (r *DumpReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.
 }
 
 // constructCronJob creates a CronJob object for the given Dump resource
-func (r *DumpReconciler) constructCronJob(dump *dumpv1alpha1.Dump) *batchv1.CronJob {
+func (r *DumpReconciler) constructCronJob(ctx context.Context, dump *dumpv1alpha1.Dump) (*batchv1.CronJob, error) {
+	log := logf.FromContext(ctx)
+	var result []map[string]string
+	for _, item := range dump.Spec.TargetPods {
+		m := map[string]string{
+			item.Key:    item.Value,
+			"namespace": item.Namespace,
+		}
+		result = append(result, m)
+	}
+
+	payload := map[string]interface{}{
+		"tcp_filter": dump.Spec.TcpFilter,
+		"items":      result,
+	}
+
+	jsonData, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		log.Error(err, "Error while marshaling payload on json.MarshalIndent()")
+		return nil, err
+	}
+
 	cronJob := &batchv1.CronJob{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      dump.Name + "-cronjob",
@@ -164,7 +190,7 @@ func (r *DumpReconciler) constructCronJob(dump *dumpv1alpha1.Dump) *batchv1.Cron
 								{
 									Name:    "dump-container",
 									Image:   "busybox:latest",
-									Command: []string{"/bin/sh", "-c", "echo 'Running dump job for " + dump.Spec.TcpFilter + "'"},
+									Command: []string{"/bin/sh", "-c", "curl -XPOST http://localhost:9090 -d '" + string(jsonData) + "'"},
 								},
 							},
 							RestartPolicy: corev1.RestartPolicyOnFailure,
@@ -174,7 +200,7 @@ func (r *DumpReconciler) constructCronJob(dump *dumpv1alpha1.Dump) *batchv1.Cron
 			},
 		},
 	}
-	return cronJob
+	return cronJob, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

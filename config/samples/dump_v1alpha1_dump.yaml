@@ -6,7 +6,7 @@ metadata:
     app.kubernetes.io/managed-by: kustomize
   name: dump-sample-new-test
 spec:
-  schedule: "* * * * *"
+  schedule: "5 4 * * *"
   tcpFilter: port 80
   targetPods:
   - key: app
