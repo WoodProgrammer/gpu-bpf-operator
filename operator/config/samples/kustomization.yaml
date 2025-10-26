@@ -1,4 +1,0 @@
-## Append samples of your project ##
-resources:
-- gputrace_v1alpha1_gputracepolicy.yaml
-# +kubebuilder:scaffold:manifestskustomizesamples
