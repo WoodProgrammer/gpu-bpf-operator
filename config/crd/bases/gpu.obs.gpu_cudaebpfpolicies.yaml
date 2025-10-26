@@ -41,7 +41,27 @@ spec:
             properties:
               functions:
                 items:
-                  type: string
+                  properties:
+                    args:
+                      items:
+                        properties:
+                          index:
+                            type: integer
+                          name:
+                            type: string
+                        required:
+                        - index
+                        - name
+                        type: object
+                      type: array
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  type: object
                 type: array
               libPath:
                 type: string
