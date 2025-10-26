@@ -1,9 +1,15 @@
 apiVersion: gpu.obs.gpu/v1alpha1
 kind: CudaEBPFPolicy
 metadata:
-  labels:
-    app.kubernetes.io/name: gpu-bpf-operator
-    app.kubernetes.io/managed-by: kustomize
-  name: cudaebpfpolicy-sample
+  name: cuda-malloc-memcpy
 spec:
-  # TODO(user): Add fields here
+  libPath: "/usr/lib/x86_64-linux-gnu/libcudart.so"
+  functions:
+    - name: "cudaMalloc"
+      kind: "uprobe"
+      args:
+        - index: 1
+          name: "size"
+    - name: "cudaFree"
+      kind: "uprobe"
+  mode: "pidwatch"

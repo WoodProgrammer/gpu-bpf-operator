@@ -25,16 +25,26 @@ import (
 
 // CudaEBPFPolicySpec defines the desired state of CudaEBPFPolicy.
 type CudaEBPFPolicySpec struct {
-	LibPath      string   `json:"libPath"`
-	Functions    []string `json:"functions"`
-	Mode         string   `json:"mode"` // "pidwatch" | "systemwide"
-	ProcessRegex string   `json:"processRegex,omitempty"`
-	OutputFormat string   `json:"output,omitempty"` // "ndjson" | "prometheus"
+	LibPath      string     `json:"libPath"`
+	Functions    []Function `json:"functions"`
+	Mode         string     `json:"mode"` // "pidwatch" | "systemwide"
+	ProcessRegex string     `json:"processRegex,omitempty"`
+	OutputFormat string     `json:"output,omitempty"` // "ndjson" | "prometheus"
 }
 
 // CudaEBPFPolicyStatus defines the observed state of CudaEBPFPolicy.
 type CudaEBPFPolicyStatus struct {
 	ObservedHash string `json:"observedHash,omitempty"`
+}
+
+type Function struct {
+	Name string `json:"name"`
+	Kind string `json:"kind"`
+	Args []Arg  `json:"args,omitempty"`
+}
+type Arg struct {
+	Index int    `json:"index"`
+	Name  string `json:"name"`
 }
 
 // +kubebuilder:object:root=true
