@@ -114,7 +114,6 @@ func (r *CudaEBPFPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 		return ctrl.Result{}, nil
 	}
-
 	// Add finalizer if it doesn't exist
 	if !controllerutil.ContainsFinalizer(policy, finalizerName) {
 		controllerutil.AddFinalizer(policy, finalizerName)
@@ -122,7 +121,6 @@ func (r *CudaEBPFPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 	}
-
 	// Calculate hash of current spec
 	currentHash, err := r.calculateHash(policy)
 	if err != nil {
