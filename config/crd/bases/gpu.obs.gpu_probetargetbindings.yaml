@@ -40,13 +40,23 @@ spec:
           spec:
             description: ProbeTargetBindingSpec defines the desired state of ProbeTargetBinding.
             properties:
-              foo:
-                description: Foo is an example field of ProbeTargetBinding. Edit probetargetbinding_types.go
-                  to remove/update
+              canaryPercent:
+                type: integer
+              maxUnavailable:
+                type: integer
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                type: object
+              policyRef:
                 type: string
+            required:
+            - policyRef
             type: object
           status:
-            description: ProbeTargetBindingStatus defines the observed state of ProbeTargetBinding.
+            properties:
+              appliedHash:
+                type: string
             type: object
         type: object
     served: true

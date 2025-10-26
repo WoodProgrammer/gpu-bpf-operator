@@ -25,17 +25,16 @@ import (
 
 // CudaEBPFPolicySpec defines the desired state of CudaEBPFPolicy.
 type CudaEBPFPolicySpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of CudaEBPFPolicy. Edit cudaebpfpolicy_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	LibPath      string   `json:"libPath"`
+	Functions    []string `json:"functions"`
+	Mode         string   `json:"mode"` // "pidwatch" | "systemwide"
+	ProcessRegex string   `json:"processRegex,omitempty"`
+	OutputFormat string   `json:"output,omitempty"` // "ndjson" | "prometheus"
 }
 
 // CudaEBPFPolicyStatus defines the observed state of CudaEBPFPolicy.
 type CudaEBPFPolicyStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	ObservedHash string `json:"observedHash,omitempty"`
 }
 
 // +kubebuilder:object:root=true

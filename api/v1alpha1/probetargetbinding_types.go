@@ -25,17 +25,13 @@ import (
 
 // ProbeTargetBindingSpec defines the desired state of ProbeTargetBinding.
 type ProbeTargetBindingSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of ProbeTargetBinding. Edit probetargetbinding_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	PolicyRef      string            `json:"policyRef"`
+	NodeSelector   map[string]string `json:"nodeSelector,omitempty"`
+	CanaryPercent  int               `json:"canaryPercent,omitempty"`
+	MaxUnavailable int               `json:"maxUnavailable,omitempty"`
 }
-
-// ProbeTargetBindingStatus defines the observed state of ProbeTargetBinding.
 type ProbeTargetBindingStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	AppliedHash string `json:"appliedHash,omitempty"`
 }
 
 // +kubebuilder:object:root=true
