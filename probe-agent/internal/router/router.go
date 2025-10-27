@@ -12,8 +12,7 @@ const (
 	apiV1 = "/v1"
 
 	// Endpoints
-	reconfigEndpoint = apiV1 + "/reconfig"
-	healthEndpoint   = "/health"
+	healthEndpoint = "/health"
 )
 
 // Setup initializes and configures all routes
