@@ -8,9 +8,24 @@ COPY . .
 RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o agent main.go
 
-FROM gcr.io/distroless/static:nonroot
+FROM ubuntu:25.04
 WORKDIR /
 COPY --from=builder /workspace/templates ./templates
 COPY --from=builder /workspace/agent .
-USER 65532:65532
+RUN apt-get update && apt-get install -y \
+    bpftrace \
+    linux-headers-generic \
+    clang \
+    llvm \
+    libelf-dev \
+    libbpf-dev \
+    zlib1g-dev \
+    cmake \
+    make \
+    g++ \
+    libclang-dev \
+    llvm-dev\
+    libelf-dev\
+    zlib1g-dev && rm -rf /var/lib/apt/lists/*
+
 ENTRYPOINT ["./agent"]
