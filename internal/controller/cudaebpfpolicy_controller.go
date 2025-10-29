@@ -136,6 +136,26 @@ func (r *CudaEBPFPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		action = "add"
 	} else if policy.Status.ObservedHash != currentHash {
 		action = "update"
+		log.Info("Update detected on policy definitions")
+
+		updatedHash, err := r.calculateHash(policy)
+		policy.Status.ObservedHash = updatedHash
+		log.Info("Hash values adjusted")
+		if err != nil {
+			log.Error(err, "Failed to calculate hash")
+			return ctrl.Result{}, err
+		}
+
+		ds := r.createDaemonsetProbeAgent(policy)
+		log.Info("Update a new Daemonset", "Daemonset.Namespace", ds.Namespace, "Daemonset.Name", ds.Name)
+		err = r.Update(ctx, ds)
+		if err != nil {
+			log.Error(err, "Failed to update new Daemonset", "Daemonset.Namespace", ds.Namespace, "Daemonset.Name", ds.Name)
+			return ctrl.Result{}, err
+		}
+		// Daemonset created successfully - return and requeue
+		return ctrl.Result{Requeue: true}, nil
+
 	} else {
 		// No changes detected
 		log.Info("No changes detected in policy spec")
@@ -201,12 +221,12 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image:   "memcached:1.4.36-alpine",
-						Name:    "memcached",
-						Command: []string{"memcached", "-m=64", "-o", "modern", "-v"},
+						Image:   policy.Spec.Image,
+						Name:    "bpfpolicyagent",
+						Command: []string{"/bin/bash", "-c", "echo", policy.Spec.LibPath},
 						Ports: []corev1.ContainerPort{{
-							ContainerPort: 11211,
-							Name:          "memcached",
+							ContainerPort: 9090,
+							Name:          "bpfpolicyagent",
 						}},
 					}},
 				},
