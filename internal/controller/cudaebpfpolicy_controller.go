@@ -205,11 +205,12 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 	labels := map[string]string{
 		"app": "gpu-operator",
 	}
-
+	ProbeCallsDetails := r.EncodeProbeCalls(policy)
+	fmt.Println("The probe call details are", ProbeCallsDetails)
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      policy.Name,
-			Namespace: "gpu-bpf-operator",
+			Namespace: "gpu-bpf-operator", // TODO namespace should be optional
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{
@@ -221,13 +222,20 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						Image:   policy.Spec.Image,
-						Name:    "bpfpolicyagent",
-						Command: []string{"/bin/bash", "-c", "echo", policy.Spec.LibPath},
+						Image: policy.Spec.Image,
+						Name:  "bpf-tracer-agent",
 						Ports: []corev1.ContainerPort{{
 							ContainerPort: 9090,
 							Name:          "bpfpolicyagent",
 						}},
+						Env: []corev1.EnvVar{{
+							Name:  "LIB_PATH",
+							Value: policy.Spec.LibPath,
+						},
+							{
+								Name:  "PROBE_CALLS",
+								Value: ProbeCallsDetails,
+							}},
 					}},
 				},
 			},
@@ -236,6 +244,11 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 	// Set Memcached instance as the owner and controller
 	ctrl.SetControllerReference(policy, ds, r.Scheme)
 	return ds
+}
+
+func (r *CudaEBPFPolicyReconciler) EncodeProbeCalls(policy *gpuv1alpha1.CudaEBPFPolicy) string {
+
+	return ""
 }
 
 // SetupWithManager sets up the controller with the Manager.

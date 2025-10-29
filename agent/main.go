@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"html/template"
 	"io"
 	"os"
@@ -15,8 +16,12 @@ import (
 )
 
 func main() {
-	// Step 1: Generate the bpftrace script from template
-	if err := generateBpftraceScript(); err != nil {
+	LIB_PATH := os.Getenv("LIB_PATH")
+	if len(LIB_PATH) == 0 {
+		err := errors.New("Missing environment variable")
+		log.Fatal().Err(err).Msg("Please environment variable LIB_PATH")
+	}
+	if err := generateBpftraceScript(LIB_PATH); err != nil {
 		log.Fatal().Err(err).Msg("Failed to generate bpftrace script")
 	}
 
@@ -35,7 +40,7 @@ func main() {
 }
 
 // generateBpftraceScript generates a bpftrace script from a template
-func generateBpftraceScript() error {
+func generateBpftraceScript(libPath string) error {
 	log.Info().Msg("Generating bpftrace script from template...")
 
 	// Prepare template data
@@ -44,7 +49,7 @@ func generateBpftraceScript() error {
 			"cudaEventRecord",
 			"cudaEventSynchronize",
 		},
-		LibPath: "/lib/cudaPath",
+		LibPath: libPath,
 	}
 
 	// Create template function map

@@ -4,12 +4,10 @@ metadata:
   name: cuda-malloc-memcpy
 spec:
   libPath: "/usr/lib/x86_64-linux-gnu/libcudart.so"
+  image: "nginx"
   functions:
     - name: "cudaMalloc"
       kind: "uprobe"
-      args:
-        - index: 1
-          name: "size"
     - name: "cudaFree"
       kind: "uprobe"
   mode: "pidwatch"
