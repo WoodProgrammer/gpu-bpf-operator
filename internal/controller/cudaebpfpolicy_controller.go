@@ -17,15 +17,15 @@ limitations under the License.
 package controller
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"os"
-	"time"
+
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -100,13 +100,16 @@ func (r *CudaEBPFPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if !policy.DeletionTimestamp.IsZero() {
 		action = "delete"
 		if controllerutil.ContainsFinalizer(policy, finalizerName) {
-			// Send delete action to monitoring server
-			if err := r.sendReconfigRequest(ctx, action, policy); err != nil {
-				log.Error(err, "Failed to send delete request to monitoring server")
+			// Daemonset logic
+			// Remove finalizer
+			found := &appsv1.DaemonSet{}
+			err = r.Get(ctx, types.NamespacedName{Name: policy.Name, Namespace: policy.Namespace}, found)
+			if err != nil && errors.IsNotFound(err) {
+				log.Error(err, "Failed to create new Daemonset", "Daemonset.Namespace", found.Namespace, "Daemonset.Name", found.Name)
+				r.Delete(ctx, found)
 				return ctrl.Result{}, err
 			}
 
-			// Remove finalizer
 			controllerutil.RemoveFinalizer(policy, finalizerName)
 			if err := r.Update(ctx, policy); err != nil {
 				return ctrl.Result{}, err
@@ -138,11 +141,23 @@ func (r *CudaEBPFPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		log.Info("No changes detected in policy spec")
 		return ctrl.Result{}, nil
 	}
-
-	// Send reconfig request to monitoring server
-	if err := r.sendReconfigRequest(ctx, action, policy); err != nil {
-		log.Error(err, "Failed to send reconfig request to monitoring server")
-		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
+	// Check if the deployment already exists, if not create a new one
+	found := &appsv1.DaemonSet{}
+	err = r.Get(ctx, types.NamespacedName{Name: policy.Name, Namespace: policy.Namespace}, found)
+	if err != nil && errors.IsNotFound(err) {
+		// Define a new deployment
+		ds := r.createDaemonsetProbeAgent(policy)
+		log.Info("Creating a new Daemonset", "Daemonset.Namespace", ds.Namespace, "Daemonset.Name", ds.Name)
+		err = r.Create(ctx, ds)
+		if err != nil {
+			log.Error(err, "Failed to create new Daemonset", "Daemonset.Namespace", ds.Namespace, "Daemonset.Name", ds.Name)
+			return ctrl.Result{}, err
+		}
+		// Deployment created successfully - return and requeue
+		return ctrl.Result{Requeue: true}, nil
+	} else if err != nil {
+		log.Error(err, "Failed to get Daemonset")
+		return ctrl.Result{}, err
 	}
 
 	// Update status with new hash
@@ -166,106 +181,41 @@ func (r *CudaEBPFPolicyReconciler) calculateHash(policy *gpuv1alpha1.CudaEBPFPol
 	return fmt.Sprintf("%x", hash), nil
 }
 
-// sendReconfigRequest sends a reconfiguration request to the monitoring server
-func (r *CudaEBPFPolicyReconciler) sendReconfigRequest(ctx context.Context, action string, policy *gpuv1alpha1.CudaEBPFPolicy) error {
-	log := logf.FromContext(ctx)
-
-	// Build policy detail from CRD and CONFIG.md
-	policyDetail, err := r.buildPolicyDetail(policy)
-	if err != nil {
-		return fmt.Errorf("failed to build policy detail: %w", err)
+func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1.CudaEBPFPolicy) *appsv1.DaemonSet {
+	labels := map[string]string{
+		"app": "gpu-operator",
 	}
 
-	// Create reconfig request
-	req := ReconfigRequest{
-		Action: action,
-		Policy: policyDetail,
-	}
-
-	// Marshal request to JSON
-	reqBody, err := json.Marshal(req)
-	if err != nil {
-		return fmt.Errorf("failed to marshal reconfig request: %w", err)
-	}
-
-	// Send HTTP POST request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", monitoringEndpoint, bytes.NewBuffer(reqBody))
-	if err != nil {
-		return fmt.Errorf("failed to create HTTP request: %w", err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{
-		Timeout: 10 * time.Second,
-	}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return fmt.Errorf("failed to send HTTP request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("monitoring server returned error status %d: %s", resp.StatusCode, string(body))
-	}
-
-	log.Info("Successfully sent reconfig request", "action", action, "endpoint", monitoringEndpoint)
-	return nil
-}
-
-// buildPolicyDetail constructs a PolicyDetail from the CRD and CONFIG.md
-func (r *CudaEBPFPolicyReconciler) buildPolicyDetail(policy *gpuv1alpha1.CudaEBPFPolicy) (PolicyDetail, error) {
-	// Read CONFIG.md for additional configuration
-	config, err := r.readConfig()
-	if err != nil {
-		// If config file doesn't exist, use CRD spec only
-		return PolicyDetail{
-			ID:           fmt.Sprintf("%s@%s", policy.Name, policy.Namespace),
-			LibPath:      policy.Spec.LibPath,
-			Mode:         policy.Spec.Mode,
-			ProcessRegex: policy.Spec.ProcessRegex,
-			Functions:    policy.Spec.Functions,
-			Output: map[string]interface{}{
-				"format": policy.Spec.OutputFormat,
+	ds := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      policy.Name,
+			Namespace: "gpu-bpf-operator",
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
 			},
-		}, nil
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: labels,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Image:   "memcached:1.4.36-alpine",
+						Name:    "memcached",
+						Command: []string{"memcached", "-m=64", "-o", "modern", "-v"},
+						Ports: []corev1.ContainerPort{{
+							ContainerPort: 11211,
+							Name:          "memcached",
+						}},
+					}},
+				},
+			},
+		},
 	}
-
-	// Merge CONFIG.md with CRD spec (CRD takes precedence)
-	policyDetail := PolicyDetail{
-		ID:           fmt.Sprintf("%s@%s", policy.Name, policy.Namespace),
-		LibPath:      policy.Spec.LibPath,
-		Mode:         policy.Spec.Mode,
-		ProcessRegex: policy.Spec.ProcessRegex,
-		Functions:    policy.Spec.Functions,
-	}
-
-	// Use output format from CONFIG.md if not specified in CRD
-	if len(config.Policies) > 0 && policy.Spec.OutputFormat == "" {
-		policyDetail.Output = config.Policies[0].Output
-	} else {
-		policyDetail.Output = map[string]interface{}{
-			"format": policy.Spec.OutputFormat,
-		}
-	}
-
-	return policyDetail, nil
-}
-
-// readConfig reads and parses the CONFIG.md file
-func (r *CudaEBPFPolicyReconciler) readConfig() (*PolicyConfig, error) {
-	data, err := os.ReadFile(configFilePath)
-	if err != nil {
-		return nil, err
-	}
-
-	var config PolicyConfig
-	if err := json.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse CONFIG.md: %w", err)
-	}
-
-	return &config, nil
+	// Set Memcached instance as the owner and controller
+	ctrl.SetControllerReference(policy, ds, r.Scheme)
+	return ds
 }
 
 // SetupWithManager sets up the controller with the Manager.
