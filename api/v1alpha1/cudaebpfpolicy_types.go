@@ -30,6 +30,7 @@ type CudaEBPFPolicySpec struct {
 	Mode         string     `json:"mode"` // "pidwatch" | "systemwide"
 	ProcessRegex string     `json:"processRegex,omitempty"`
 	OutputFormat string     `json:"output,omitempty"` // "ndjson" | "prometheus"
+	Image        string     `json:"image"`
 }
 
 // CudaEBPFPolicyStatus defines the observed state of CudaEBPFPolicy.

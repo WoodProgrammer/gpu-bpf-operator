@@ -63,6 +63,8 @@ spec:
                   - name
                   type: object
                 type: array
+              image:
+                type: string
               libPath:
                 type: string
               mode:
@@ -73,6 +75,7 @@ spec:
                 type: string
             required:
             - functions
+            - image
             - libPath
             - mode
             type: object
