@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"crypto/sha256"
+	b64 "encoding/base64"
 	"encoding/json"
 	"fmt"
 
@@ -205,8 +206,10 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 	labels := map[string]string{
 		"app": "gpu-operator",
 	}
-	ProbeCallsDetails := r.EncodeProbeCalls(policy)
-	fmt.Println("The probe call details are", ProbeCallsDetails)
+	ProbeCallsDetails, err := r.EncodeProbeCalls(policy)
+	if err != nil {
+		return nil
+	}
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      policy.Name,
@@ -246,9 +249,28 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 	return ds
 }
 
-func (r *CudaEBPFPolicyReconciler) EncodeProbeCalls(policy *gpuv1alpha1.CudaEBPFPolicy) string {
+func (r *CudaEBPFPolicyReconciler) EncodeProbeCalls(policy *gpuv1alpha1.CudaEBPFPolicy) (string, error) {
+	type Function struct {
+		Kind string
+		Name string
+	}
+	tmpArr := []Function{}
 
-	return ""
+	for _, v := range policy.Spec.Functions {
+		fn := Function{
+			Name: v.Name,
+			Kind: v.Kind,
+		}
+
+		tmpArr = append(tmpArr, fn)
+
+	}
+	jsonBytes, err := json.Marshal(tmpArr)
+	if err != nil {
+		return "", err
+	}
+	sEnc := b64.StdEncoding.EncodeToString([]byte(jsonBytes))
+	return sEnc, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
