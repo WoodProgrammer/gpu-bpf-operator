@@ -6,9 +6,10 @@ WORKDIR /workspace
 # Copy the go source
 COPY . .
 RUN go mod tidy
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o agent main.go
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o agent .
 
 FROM ubuntu:25.04
+
 WORKDIR /
 COPY --from=builder /workspace/templates ./templates
 COPY --from=builder /workspace/agent .
