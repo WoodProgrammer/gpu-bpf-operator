@@ -1,10 +1,10 @@
 apiVersion: gpu.obs.gpu/v1alpha1
 kind: CudaEBPFPolicy
 metadata:
-  name: cuda-malloc-memcpy-hede-qwd123
+  name: cuda-trace
 spec:
   libPath: "/usr/lib/x86_64-linux-gnu/libcudart.so"
-  image: "nginx"
+  image: "emirozbir/gpu-bpf-operator-agent:latest"
   functions:
     - name: "cudaStreamCreate"
       kind: "uprobe"

@@ -39,9 +39,7 @@ import (
 )
 
 const (
-	finalizerName      = "gpu.obs.gpu/finalizer"
-	monitoringEndpoint = "http://dummy.monitoring.gpu.svc:9090/reconfig"
-	configFilePath     = "CONFIG.md"
+	finalizerName = "gpu.obs.gpu/finalizer"
 )
 
 // CudaEBPFPolicyReconciler reconciles a CudaEBPFPolicy object
@@ -220,7 +218,7 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 	// Define security capabilities required for eBPF
 	capabilities := &corev1.Capabilities{
 		Add: []corev1.Capability{
-			"SYS_ADMIN",   // Required for loading eBPF programs
+			"SYS_ADMIN",    // Required for loading eBPF programs
 			"SYS_RESOURCE", // For setting memory limits
 			"SYS_PTRACE",   // For attaching to processes
 			"NET_ADMIN",    // For network-related eBPF programs
@@ -249,7 +247,7 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 		},
 		{
 			Name:      "cuda-lib",
-			MountPath: "/host" + policy.Spec.LibPath,
+			MountPath: policy.Spec.LibPath,
 			ReadOnly:  true,
 		},
 	}
