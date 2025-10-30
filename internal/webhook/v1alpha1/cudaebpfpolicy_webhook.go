@@ -19,8 +19,10 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -65,7 +67,10 @@ func (d *CudaEBPFPolicyCustomDefaulter) Default(_ context.Context, obj runtime.O
 	}
 	cudaebpfpolicylog.Info("Defaulting for CudaEBPFPolicy", "name", cudaebpfpolicy.GetName())
 
-	// TODO(user): fill in your defaulting logic.
+	// Set default mode to pidwatch if not specified
+	if cudaebpfpolicy.Spec.Mode == "" {
+		cudaebpfpolicy.Spec.Mode = "pidwatch"
+	}
 
 	return nil
 }
@@ -94,9 +99,7 @@ func (v *CudaEBPFPolicyCustomValidator) ValidateCreate(_ context.Context, obj ru
 	}
 	cudaebpfpolicylog.Info("Validation for CudaEBPFPolicy upon creation", "name", cudaebpfpolicy.GetName())
 
-	// TODO(user): fill in your validation logic upon object creation.
-
-	return nil, nil
+	return nil, v.validateCudaEBPFPolicy(cudaebpfpolicy)
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type CudaEBPFPolicy.
@@ -107,9 +110,7 @@ func (v *CudaEBPFPolicyCustomValidator) ValidateUpdate(_ context.Context, oldObj
 	}
 	cudaebpfpolicylog.Info("Validation for CudaEBPFPolicy upon update", "name", cudaebpfpolicy.GetName())
 
-	// TODO(user): fill in your validation logic upon object update.
-
-	return nil, nil
+	return nil, v.validateCudaEBPFPolicy(cudaebpfpolicy)
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type CudaEBPFPolicy.
@@ -120,7 +121,149 @@ func (v *CudaEBPFPolicyCustomValidator) ValidateDelete(ctx context.Context, obj 
 	}
 	cudaebpfpolicylog.Info("Validation for CudaEBPFPolicy upon deletion", "name", cudaebpfpolicy.GetName())
 
-	// TODO(user): fill in your validation logic upon object deletion.
-
+	// No validation needed on delete
 	return nil, nil
+}
+
+// validateCudaEBPFPolicy validates the CudaEBPFPolicy spec
+func (v *CudaEBPFPolicyCustomValidator) validateCudaEBPFPolicy(policy *gpuv1alpha1.CudaEBPFPolicy) error {
+	var allErrs field.ErrorList
+
+	// Validate functions field
+	if err := v.validateFunctions(policy.Spec.Functions, field.NewPath("spec").Child("functions")); err != nil {
+		allErrs = append(allErrs, err...)
+	}
+
+	// Validate mode field
+	if err := v.validateMode(policy.Spec.Mode, field.NewPath("spec").Child("mode")); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
+	// Validate outputFormat field
+	if err := v.validateOutputFormat(policy.Spec.OutputFormat, field.NewPath("spec").Child("output")); err != nil {
+		allErrs = append(allErrs, err)
+	}
+
+	// Validate libPath is not empty
+	if policy.Spec.LibPath == "" {
+		allErrs = append(allErrs, field.Required(field.NewPath("spec").Child("libPath"), "libPath must be specified"))
+	}
+
+	// Validate image is not empty
+	if policy.Spec.Image == "" {
+		allErrs = append(allErrs, field.Required(field.NewPath("spec").Child("image"), "image must be specified"))
+	}
+
+	if len(allErrs) == 0 {
+		return nil
+	}
+
+	return allErrs.ToAggregate()
+}
+
+// validateFunctions validates the functions field
+func (v *CudaEBPFPolicyCustomValidator) validateFunctions(functions []gpuv1alpha1.Function, fldPath *field.Path) field.ErrorList {
+	var allErrs field.ErrorList
+
+	// Validate functions array is not empty
+	if len(functions) == 0 {
+		allErrs = append(allErrs, field.Required(fldPath, "at least one function must be specified"))
+		return allErrs
+	}
+
+	// Track function names to detect duplicates
+	functionNames := make(map[string]bool)
+
+	for i, fn := range functions {
+		funcPath := fldPath.Index(i)
+
+		// Validate function name is not empty
+		if fn.Name == "" {
+			allErrs = append(allErrs, field.Required(funcPath.Child("name"), "function name must be specified"))
+		}
+
+		// Check for duplicate function names
+		if functionNames[fn.Name] {
+			allErrs = append(allErrs, field.Duplicate(funcPath.Child("name"), fn.Name))
+		}
+		functionNames[fn.Name] = true
+
+		// Validate function kind
+		validKinds := []string{"uprobe", "uretprobe", "kprobe", "kretprobe"}
+		if !contains(validKinds, fn.Kind) {
+			allErrs = append(allErrs, field.NotSupported(funcPath.Child("kind"), fn.Kind, validKinds))
+		}
+
+		// Validate arguments if present
+		if len(fn.Args) > 0 {
+			if err := v.validateArgs(fn.Args, funcPath.Child("args")); err != nil {
+				allErrs = append(allErrs, err...)
+			}
+		}
+	}
+
+	return allErrs
+}
+
+// validateArgs validates function arguments
+func (v *CudaEBPFPolicyCustomValidator) validateArgs(args []gpuv1alpha1.Arg, fldPath *field.Path) field.ErrorList {
+	var allErrs field.ErrorList
+
+	// Track argument indices to detect duplicates
+	argIndices := make(map[int]bool)
+
+	for i, arg := range args {
+		argPath := fldPath.Index(i)
+
+		// Validate argument name is not empty
+		if arg.Name == "" {
+			allErrs = append(allErrs, field.Required(argPath.Child("name"), "argument name must be specified"))
+		}
+
+		// Validate argument index is non-negative
+		if arg.Index < 0 {
+			allErrs = append(allErrs, field.Invalid(argPath.Child("index"), arg.Index, "argument index must be non-negative"))
+		}
+
+		// Check for duplicate argument indices
+		if argIndices[arg.Index] {
+			allErrs = append(allErrs, field.Duplicate(argPath.Child("index"), arg.Index))
+		}
+		argIndices[arg.Index] = true
+	}
+
+	return allErrs
+}
+
+// validateMode validates the mode field
+func (v *CudaEBPFPolicyCustomValidator) validateMode(mode string, fldPath *field.Path) *field.Error {
+	validModes := []string{"pidwatch", "systemwide"}
+	if !contains(validModes, mode) {
+		return field.NotSupported(fldPath, mode, validModes)
+	}
+	return nil
+}
+
+// validateOutputFormat validates the output format field
+func (v *CudaEBPFPolicyCustomValidator) validateOutputFormat(format string, fldPath *field.Path) *field.Error {
+	// Empty format is allowed (will be defaulted)
+	if format == "" {
+		return nil
+	}
+
+	validFormats := []string{"ndjson", "prometheus"}
+	if !contains(validFormats, format) {
+		return field.NotSupported(fldPath, format, validFormats)
+	}
+	return nil
+}
+
+// contains checks if a string is in a slice
+func contains(slice []string, str string) bool {
+	for _, s := range slice {
+		if strings.EqualFold(s, str) {
+			return true
+		}
+	}
+	return false
 }
