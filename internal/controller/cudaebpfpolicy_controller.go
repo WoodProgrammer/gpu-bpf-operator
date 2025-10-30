@@ -39,9 +39,7 @@ import (
 )
 
 const (
-	finalizerName      = "gpu.obs.gpu/finalizer"
-	monitoringEndpoint = "http://dummy.monitoring.gpu.svc:9090/reconfig"
-	configFilePath     = "CONFIG.md"
+	finalizerName = "gpu.obs.gpu/finalizer"
 )
 
 // CudaEBPFPolicyReconciler reconciles a CudaEBPFPolicy object
@@ -216,6 +214,88 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 	if err != nil {
 		return nil, err
 	}
+
+	// Define security capabilities required for eBPF
+	capabilities := &corev1.Capabilities{
+		Add: []corev1.Capability{
+			"SYS_ADMIN",    // Required for loading eBPF programs
+			"SYS_RESOURCE", // For setting memory limits
+			"SYS_PTRACE",   // For attaching to processes
+			"NET_ADMIN",    // For network-related eBPF programs
+			"BPF",          // Specific eBPF capability (Linux 5.8+)
+			"PERFMON",      // For performance monitoring (Linux 5.8+)
+		},
+	}
+
+	// Define volume mounts for eBPF operations
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "sys-fs-bpf",
+			MountPath: "/sys/fs/bpf",
+		},
+		{
+			Name:      "sys-kernel-debug",
+			MountPath: "/sys/kernel/debug",
+		},
+		{
+			Name:      "sys-kernel-tracing",
+			MountPath: "/sys/kernel/tracing",
+		},
+		{
+			Name:      "proc",
+			MountPath: "/proc",
+		},
+		{
+			Name:      "cuda-lib",
+			MountPath: policy.Spec.LibPath,
+			ReadOnly:  true,
+		},
+	}
+
+	// Define volumes from host paths
+	hostPathDirectory := corev1.HostPathDirectory
+	hostPathFile := corev1.HostPathFile
+	volumes := []corev1.Volume{
+		{
+			Name: "sys-fs-bpf",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/sys/fs/bpf",
+					Type: &hostPathDirectory,
+				},
+			},
+		},
+		{
+			Name: "sys-kernel-debug",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/sys/kernel/debug",
+					Type: &hostPathDirectory,
+				},
+			},
+		},
+		{
+			Name: "proc",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/proc",
+					Type: &hostPathDirectory,
+				},
+			},
+		},
+		{
+			Name: "cuda-lib",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: policy.Spec.LibPath,
+					Type: &hostPathFile,
+				},
+			},
+		},
+	}
+
+	hostPID := true
+
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      policy.Name,
@@ -230,6 +310,8 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 					Labels: labels,
 				},
 				Spec: corev1.PodSpec{
+					HostPID: hostPID,
+					Volumes: volumes,
 					Containers: []corev1.Container{{
 						Image: policy.Spec.Image,
 						Name:  "bpf-tracer-agent",
@@ -245,6 +327,10 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 								Name:  "PROBE_CALLS",
 								Value: probeCallsDetails,
 							}},
+						SecurityContext: &corev1.SecurityContext{
+							Capabilities: capabilities,
+						},
+						VolumeMounts: volumeMounts,
 					}},
 				},
 			},
