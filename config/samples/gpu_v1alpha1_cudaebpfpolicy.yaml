@@ -6,8 +6,8 @@ spec:
   libPath: "/usr/lib/x86_64-linux-gnu/libcudart.so"
   image: "nginx"
   functions:
-    - name: "cudaMalloc"
+    - name: "cudaStreamCreate"
       kind: "uprobe"
-    - name: "cudaFree"
+    - name: "cudaStreamSynchronize"
       kind: "uprobe"
   mode: "pidwatch"

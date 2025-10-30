@@ -206,9 +206,9 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 	labels := map[string]string{
 		"app": "gpu-operator",
 	}
-	ProbeCallsDetails, err := r.EncodeProbeCalls(policy)
+	probeCallsDetails, err := r.EncodeProbeCalls(policy)
 	if err != nil {
-		return nil
+		return nil // TODO log by context should be fixed
 	}
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -237,7 +237,7 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 						},
 							{
 								Name:  "PROBE_CALLS",
-								Value: ProbeCallsDetails,
+								Value: probeCallsDetails,
 							}},
 					}},
 				},

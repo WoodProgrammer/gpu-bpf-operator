@@ -3,6 +3,8 @@ package main
 import (
 	"bufio"
 	"context"
+	b64 "encoding/base64"
+	"encoding/json"
 	"errors"
 	"html/template"
 	"io"
@@ -41,15 +43,27 @@ func main() {
 
 // generateBpftraceScript generates a bpftrace script from a template
 func generateBpftraceScript(libPath string) error {
-	log.Info().Msg("Generating bpftrace script from template...")
-
-	// Prepare template data
+	var probes []Probe
 	templateData := TemplateProbeLib{
-		ProbeLib: []string{
-			"cudaEventRecord",
-			"cudaEventSynchronize",
-		},
-		LibPath: libPath,
+		ProbeLib: []string{},
+		LibPath:  libPath,
+	}
+
+	log.Info().Msg("Generating bpftrace script from template...")
+	probeEnv := os.Getenv("PROBE_CALLS")
+
+	if len(probeEnv) == 0 {
+		err := errors.New("missing environment variable PROBE_CALLS")
+		log.Err(err).Msg("Please set PROBE_CALLS environment variable")
+		return err
+	}
+	sDec, _ := b64.StdEncoding.DecodeString(probeEnv)
+	if err := json.Unmarshal([]byte(sDec), &probes); err != nil {
+		log.Err(err).Msg("ERror ")
+	}
+	// Access the parsed data
+	for _, p := range probes {
+		templateData.ProbeLib = append(templateData.ProbeLib, p.Name)
 	}
 
 	// Create template function map

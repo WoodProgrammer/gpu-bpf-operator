@@ -9,3 +9,8 @@ type TemplateProbeLib struct {
 	ProbeLib []string
 	LibPath  string
 }
+
+type Probe struct {
+	Kind string `json:"Kind"`
+	Name string `json:"Name"`
+}
