@@ -3,6 +3,9 @@ package main
 import (
 	"bufio"
 	"context"
+	b64 "encoding/base64"
+	"encoding/json"
+	"errors"
 	"html/template"
 	"io"
 	"os"
@@ -15,8 +18,12 @@ import (
 )
 
 func main() {
-	// Step 1: Generate the bpftrace script from template
-	if err := generateBpftraceScript(); err != nil {
+	LIB_PATH := os.Getenv("LIB_PATH")
+	if len(LIB_PATH) == 0 {
+		err := errors.New("Missing environment variable")
+		log.Fatal().Err(err).Msg("Please environment variable LIB_PATH")
+	}
+	if err := generateBpftraceScript(LIB_PATH); err != nil {
 		log.Fatal().Err(err).Msg("Failed to generate bpftrace script")
 	}
 
@@ -35,16 +42,28 @@ func main() {
 }
 
 // generateBpftraceScript generates a bpftrace script from a template
-func generateBpftraceScript() error {
-	log.Info().Msg("Generating bpftrace script from template...")
-
-	// Prepare template data
+func generateBpftraceScript(libPath string) error {
+	var probes []Probe
 	templateData := TemplateProbeLib{
-		ProbeLib: []string{
-			"cudaEventRecord",
-			"cudaEventSynchronize",
-		},
-		LibPath: "/lib/cudaPath",
+		ProbeLib: []string{},
+		LibPath:  libPath,
+	}
+
+	log.Info().Msg("Generating bpftrace script from template...")
+	probeEnv := os.Getenv("PROBE_CALLS")
+
+	if len(probeEnv) == 0 {
+		err := errors.New("missing environment variable PROBE_CALLS")
+		log.Err(err).Msg("Please set PROBE_CALLS environment variable")
+		return err
+	}
+	sDec, _ := b64.StdEncoding.DecodeString(probeEnv)
+	if err := json.Unmarshal([]byte(sDec), &probes); err != nil {
+		log.Err(err).Msg("ERror ")
+	}
+	// Access the parsed data
+	for _, p := range probes {
+		templateData.ProbeLib = append(templateData.ProbeLib, p.Name)
 	}
 
 	// Create template function map
