@@ -1,7 +1,7 @@
 apiVersion: gpu.obs.gpu/v1alpha1
 kind: CudaEBPFPolicy
 metadata:
-  name: cuda-malloc-memcpy
+  name: cuda-malloc-memcpy-hede-qwd123
 spec:
   libPath: "/usr/lib/x86_64-linux-gnu/libcudart.so"
   image: "nginx"

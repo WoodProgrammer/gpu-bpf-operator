@@ -33,3 +33,17 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - apps/v1
+  - apps
+  resources:
+  - daemonset
+  - daemonsets
+  verbs:
+  - get
+  - patch
+  - update
+  - list
+  - create
+  - delete
+  - watch

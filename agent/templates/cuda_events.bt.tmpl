@@ -82,7 +82,7 @@ uretprobe:{{.LibPath}}:cudaMemcpy
 }
 {{- end }}
 
-{{- if contains "cudaFree" .ProbeLib }}
+{{- if contains "cudaLaunchKernel" .ProbeLib }}
 
 // Kernel launches
 uprobe:{{.LibPath}}:cudaLaunchKernel
