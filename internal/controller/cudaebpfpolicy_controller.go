@@ -147,7 +147,10 @@ func (r *CudaEBPFPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 			return ctrl.Result{}, err
 		}
 
-		ds := r.createDaemonsetProbeAgent(policy)
+		ds, err := r.createDaemonsetProbeAgent(policy)
+		if err != nil {
+			log.Error(err, "error while creating daemonset object")
+		}
 		log.Info("Update a new Daemonset", "Daemonset.Namespace", ds.Namespace, "Daemonset.Name", ds.Name)
 		err = r.Update(ctx, ds)
 		if err != nil {
@@ -167,7 +170,10 @@ func (r *CudaEBPFPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	err = r.Get(ctx, types.NamespacedName{Name: policy.Name, Namespace: policy.Namespace}, found)
 	if err != nil && errors.IsNotFound(err) {
 		// Define a new deployment
-		ds := r.createDaemonsetProbeAgent(policy)
+		ds, err := r.createDaemonsetProbeAgent(policy)
+		if err != nil {
+			log.Error(err, "error while creating daemonset object")
+		}
 		log.Info("Creating a new Daemonset", "Daemonset.Namespace", ds.Namespace, "Daemonset.Name", ds.Name)
 		err = r.Create(ctx, ds)
 		if err != nil {
@@ -202,18 +208,18 @@ func (r *CudaEBPFPolicyReconciler) calculateHash(policy *gpuv1alpha1.CudaEBPFPol
 	return fmt.Sprintf("%x", hash), nil
 }
 
-func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1.CudaEBPFPolicy) *appsv1.DaemonSet {
+func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1.CudaEBPFPolicy) (*appsv1.DaemonSet, error) {
 	labels := map[string]string{
 		"app": "gpu-operator",
 	}
 	probeCallsDetails, err := r.EncodeProbeCalls(policy)
 	if err != nil {
-		return nil // TODO log by context should be fixed
+		return nil, err
 	}
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      policy.Name,
-			Namespace: "gpu-bpf-operator", // TODO namespace should be optional
+			Namespace: policy.ObjectMeta.Namespace,
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{
@@ -244,9 +250,8 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 			},
 		},
 	}
-	// Set Memcached instance as the owner and controller
 	ctrl.SetControllerReference(policy, ds, r.Scheme)
-	return ds
+	return ds, nil
 }
 
 func (r *CudaEBPFPolicyReconciler) EncodeProbeCalls(policy *gpuv1alpha1.CudaEBPFPolicy) (string, error) {
