@@ -254,7 +254,7 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 
 	// Define volumes from host paths
 	hostPathDirectory := corev1.HostPathDirectory
-	hostPathDirectoryOrCreate := corev1.HostPathDirectoryOrCreate
+	hostPathFile := corev1.HostPathFile
 	volumes := []corev1.Volume{
 		{
 			Name: "sys-fs-bpf",
@@ -275,15 +275,6 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 			},
 		},
 		{
-			Name: "sys-kernel-tracing",
-			VolumeSource: corev1.VolumeSource{
-				HostPath: &corev1.HostPathVolumeSource{
-					Path: "/sys/kernel/tracing",
-					Type: &hostPathDirectoryOrCreate,
-				},
-			},
-		},
-		{
 			Name: "proc",
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
@@ -297,7 +288,7 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
 					Path: policy.Spec.LibPath,
-					Type: &hostPathDirectory,
+					Type: &hostPathFile,
 				},
 			},
 		},
