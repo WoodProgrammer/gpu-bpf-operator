@@ -18,12 +18,7 @@ import (
 )
 
 func main() {
-	LIB_PATH := os.Getenv("LIB_PATH")
-	if len(LIB_PATH) == 0 {
-		err := errors.New("Missing environment variable")
-		log.Fatal().Err(err).Msg("Please environment variable LIB_PATH")
-	}
-	if err := generateBpftraceScript(LIB_PATH); err != nil {
+	if err := generateBpftraceScript(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to generate bpftrace script")
 	}
 
@@ -42,11 +37,10 @@ func main() {
 }
 
 // generateBpftraceScript generates a bpftrace script from a template
-func generateBpftraceScript(libPath string) error {
+func generateBpftraceScript() error {
 	var probes []Probe
 	templateData := TemplateProbeLib{
 		ProbeLib: []string{},
-		LibPath:  libPath,
 	}
 
 	log.Info().Msg("Generating bpftrace script from template...")
@@ -79,7 +73,7 @@ func generateBpftraceScript(libPath string) error {
 	}
 
 	// Parse template
-	tmpl, err := template.New("cuda_events.bt.tmpl").Funcs(funcMap).ParseFiles(TEMPLATE_FILE_PATH)
+	tmpl, err := template.New("nvidia_events.bt.tmpl").Funcs(funcMap).ParseFiles(TEMPLATE_FILE_PATH)
 	if err != nil {
 		return err
 	}

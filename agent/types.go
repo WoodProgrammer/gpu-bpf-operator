@@ -1,8 +1,8 @@
 package main
 
 const (
-	TEMPLATE_FILE_PATH = "templates/cuda_events.bt.tmpl"
-	BT_FILE_PATH       = "/tmp/cuda_events.bt"
+	TEMPLATE_FILE_PATH = "templates/nvidia_events.bt.tmpl"
+	BT_FILE_PATH       = "/tmp/nvidia_events.bt"
 )
 
 type TemplateProbeLib struct {

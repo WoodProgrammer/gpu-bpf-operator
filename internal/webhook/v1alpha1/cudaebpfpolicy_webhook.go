@@ -155,8 +155,8 @@ func (v *CudaEBPFPolicyCustomValidator) validateCudaEBPFPolicy(policy *gpuv1alph
 	}
 
 	for _, fn := range policy.Spec.Functions {
-		if !contains(ALLOWED_CUDA_EVENTS, fn.Name) {
-			allErrs = append(allErrs, field.Required(field.NewPath("spec").Child("functions"), fmt.Sprintf("Invalid cuda event defined %s", fn.Name)))
+		if !contains(ALLOWED_GPU_EVENTS, fn.Name) {
+			allErrs = append(allErrs, field.Required(field.NewPath("spec").Child("functions"), fmt.Sprintf("Invalid nvidia event defined %s", fn.Name)))
 		}
 	}
 	if len(allErrs) == 0 {

@@ -1,0 +1,78 @@
+#!/usr/bin/env bpftrace
+/* nvidia_driver.bt - Monitor NVIDIA proprietary GPU driver activity */
+
+BEGIN
+{
+    printf("Tracing NVIDIA GPU driver activity... Hit Ctrl-C to end.\n");
+    printf("%-12s %-18s %-16s %-8s %-8s %-20s\n",
+           "TIME(ms)", "EVENT", "COMM", "PID", "GPU_ID", "DETAILS");
+}
+
+{{- if contains "nvidia_open" .ProbeLib }}
+kprobe:nvidia_open
+{
+    printf("%-12llu %-18s %-16s %-8d %-8s %s\n",
+           elapsed / 1000000, "OPEN", comm, pid, "-", "GPU device opened");
+    @opens[comm] = count();
+    @open_pids[pid] = 1;
+}
+{{- end }}
+
+
+{{- if contains "nvidia_unlocked_ioctl" .ProbeLib }}
+
+kprobe:nvidia_unlocked_ioctl
+{
+    @ioctl_count = count();
+    @ioctls_per_process[comm] = count();
+    if (rand % 100 == 0) {  /* Sample 1% */
+        printf("%-12llu %-18s %-16s %-8d %-8s cmd=0x%lx\n",
+               elapsed / 1000000, "IOCTL", comm, pid, "-", arg1);
+    }
+}
+{{- end }}
+
+{{- if contains "nvidia_mmap" .ProbeLib }}
+
+
+kprobe:nvidia_mmap
+{
+    @mmap_count = count();
+    @total_mmap_bytes = sum(arg2);
+    printf("%-12llu %-18s %-16s %-8d %-8s offset=0x%lx size=%lu\n",
+           elapsed / 1000000, "MMAP", comm, pid, "-", arg1, arg2);
+}
+
+{{- end }}
+
+{{- if contains "nvidia_isr" .ProbeLib }}
+
+kprobe:nvidia_isr
+{
+    @isr_count = count();
+    @last_isr_time = nsecs;
+}
+
+{{- end }}
+
+{{- if contains "nvidia_isr_kthread_bh" .ProbeLib }}
+
+kprobe:nvidia_isr_kthread_bh
+{
+    @isr_bh_count = count();
+    if (@last_isr_time > 0) {
+        @isr_latency_us = hist((nsecs - @last_isr_time) / 1000);
+    }
+}
+
+{{- end }}
+
+END
+{
+    printf("\n=== NVIDIA GPU Driver Statistics ===\n");
+    printf("Opens by process:\n"); print(@opens);
+    printf("Total ioctls:\n"); print(@ioctl_count);
+    printf("Top ioctl callers:\n"); print(@ioctls_per_process);
+    printf("Total mmaps:\n"); print(@mmap_count);
+}
+
