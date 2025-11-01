@@ -6,6 +6,10 @@ BEGIN
     printf("Tracing NVIDIA GPU driver activity... Hit Ctrl-C to end.\n");
     printf("%-12s %-18s %-16s %-8s %-8s %-20s\n",
            "TIME(ms)", "EVENT", "COMM", "PID", "GPU_ID", "DETAILS");
+
+    /* Configuration */
+    @ioctl_sample_rate = 50;  /* Sample 2% of IOCTLs */
+    @verbose = 0;             /* Set to 1 for more detailed output */
 }
 
 {{- if contains "nvidia_open" .ProbeLib }}
@@ -16,6 +20,16 @@ kprobe:nvidia_open
     @opens[comm] = count();
     @open_pids[pid] = 1;
 }
+
+kretprobe:nvidia_open
+{
+    if (retval < 0) {
+        printf("%-12llu %-18s %-16s %-8d %-8s error=%d\n",
+               elapsed / 1000000, "OPEN_FAILED", comm, pid, "-", retval);
+        @open_errors = count();
+        @open_errors_by_process[comm] = count();
+    }
+}
 {{- end }}
 
 
@@ -25,9 +39,43 @@ kprobe:nvidia_unlocked_ioctl
 {
     @ioctl_count = count();
     @ioctls_per_process[comm] = count();
-    if (rand % 100 == 0) {  /* Sample 1% */
-        printf("%-12llu %-18s %-16s %-8d %-8s cmd=0x%lx\n",
-               elapsed / 1000000, "IOCTL", comm, pid, "-", arg1);
+    @ioctl_start[tid] = nsecs;
+
+    /* Decode IOCTL command type */
+    $cmd = arg1;
+    $type = ($cmd >> 8) & 0xFF;
+    @ioctl_types[$type] = count();
+
+    if (rand % @ioctl_sample_rate == 0) {
+        printf("%-12llu %-18s %-16s %-8d %-8s type=0x%02x cmd=0x%lx\n",
+               elapsed / 1000000, "IOCTL", comm, pid, "-", $type, $cmd);
+    }
+}
+
+kretprobe:nvidia_unlocked_ioctl
+{
+    if (@ioctl_start[tid]) {
+        $duration = nsecs - @ioctl_start[tid];
+        @ioctl_latency_us = hist($duration / 1000);
+
+        /* Track slow IOCTLs (>10ms) */
+        if ($duration > 10000000) {
+            @slow_ioctls = count();
+            if (@verbose) {
+                printf("%-12llu %-18s %-16s %-8d %-8s duration=%llu us\n",
+                       elapsed / 1000000, "IOCTL_SLOW", comm, pid, "-", $duration / 1000);
+            }
+        }
+
+        delete(@ioctl_start[tid]);
+    }
+
+    /* Track IOCTL errors */
+    if (retval < 0) {
+        @ioctl_errors = count();
+        @ioctl_errors_by_process[comm] = count();
+        printf("%-12llu %-18s %-16s %-8d %-8s error=%d\n",
+               elapsed / 1000000, "IOCTL_ERROR", comm, pid, "-", retval);
     }
 }
 {{- end }}
@@ -39,8 +87,20 @@ kprobe:nvidia_mmap
 {
     @mmap_count = count();
     @total_mmap_bytes = sum(arg2);
+    @mmap_bytes_per_process[comm] = sum(arg2);
+    @mmap_size_histogram = hist(arg2);
+
     printf("%-12llu %-18s %-16s %-8d %-8s offset=0x%lx size=%lu\n",
            elapsed / 1000000, "MMAP", comm, pid, "-", arg1, arg2);
+}
+
+kretprobe:nvidia_mmap
+{
+    if (retval < 0) {
+        @mmap_errors = count();
+        printf("%-12llu %-18s %-16s %-8d %-8s error=%d\n",
+               elapsed / 1000000, "MMAP_FAILED", comm, pid, "-", retval);
+    }
 }
 
 {{- end }}
@@ -67,12 +127,112 @@ kprobe:nvidia_isr_kthread_bh
 
 {{- end }}
 
+{{- if contains "nvidia_release" .ProbeLib }}
+
+kprobe:nvidia_release
+{
+    printf("%-12llu %-18s %-16s %-8d %-8s %s\n",
+           elapsed / 1000000, "CLOSE", comm, pid, "-", "GPU device closed");
+    @closes[comm] = count();
+    delete(@open_pids[pid]);
+}
+
+{{- end }}
+
 END
 {
     printf("\n=== NVIDIA GPU Driver Statistics ===\n");
-    printf("Opens by process:\n"); print(@opens);
-    printf("Total ioctls:\n"); print(@ioctl_count);
-    printf("Top ioctl callers:\n"); print(@ioctls_per_process);
-    printf("Total mmaps:\n"); print(@mmap_count);
+
+    /* Device Operations */
+    printf("\n--- Device Operations ---\n");
+    if (@opens) {
+        printf("Opens by process:\n");
+        print(@opens);
+    }
+    if (@closes) {
+        printf("\nCloses by process:\n");
+        print(@closes);
+    }
+    if (@open_errors) {
+        printf("\nOpen errors: %d\n", @open_errors);
+        printf("Open errors by process:\n");
+        print(@open_errors_by_process);
+    }
+    if (@open_pids) {
+        printf("\nActive GPU processes (still open):\n");
+        print(@open_pids);
+    }
+
+    /* IOCTL Operations */
+    printf("\n--- IOCTL Operations ---\n");
+    if (@ioctl_count) {
+        printf("Total IOCTLs: %d\n", @ioctl_count);
+    }
+    if (@ioctl_types) {
+        printf("\nIOCTL types distribution:\n");
+        print(@ioctl_types);
+    }
+    if (@ioctls_per_process) {
+        printf("\nTop IOCTL callers:\n");
+        print(@ioctls_per_process);
+    }
+    if (@ioctl_latency_us) {
+        printf("\nIOCTL latency distribution (microseconds):\n");
+        print(@ioctl_latency_us);
+    }
+    if (@slow_ioctls) {
+        printf("\nSlow IOCTLs (>10ms): %d\n", @slow_ioctls);
+    }
+    if (@ioctl_errors) {
+        printf("\nIOCTL errors: %d\n", @ioctl_errors);
+        printf("IOCTL errors by process:\n");
+        print(@ioctl_errors_by_process);
+    }
+
+    /* Memory Operations */
+    printf("\n--- Memory Operations ---\n");
+    if (@mmap_count) {
+        printf("Total mmaps: %d\n", @mmap_count);
+    }
+    if (@total_mmap_bytes) {
+        printf("Total mmap bytes: %d (%.2f MB)\n",
+               @total_mmap_bytes, @total_mmap_bytes / 1048576.0);
+    }
+    if (@mmap_bytes_per_process) {
+        printf("\nMemory mapped per process (bytes):\n");
+        print(@mmap_bytes_per_process);
+    }
+    if (@mmap_size_histogram) {
+        printf("\nMMAP size distribution:\n");
+        print(@mmap_size_histogram);
+    }
+    if (@mmap_errors) {
+        printf("\nMMAP errors: %d\n", @mmap_errors);
+    }
+
+    /* Interrupt Handling */
+    printf("\n--- Interrupt Handling ---\n");
+    if (@isr_count) {
+        printf("ISR count: %d\n", @isr_count);
+    }
+    if (@isr_bh_count) {
+        printf("ISR bottom-half count: %d\n", @isr_bh_count);
+    }
+    if (@isr_latency_us) {
+        printf("\nISR latency distribution (microseconds):\n");
+        print(@isr_latency_us);
+    }
+
+    /* Cleanup all maps */
+    clear(@opens); clear(@closes); clear(@open_pids);
+    clear(@open_errors); clear(@open_errors_by_process);
+    clear(@ioctl_count); clear(@ioctls_per_process); clear(@ioctl_types);
+    clear(@ioctl_latency_us); clear(@ioctl_start); clear(@slow_ioctls);
+    clear(@ioctl_errors); clear(@ioctl_errors_by_process);
+    clear(@mmap_count); clear(@total_mmap_bytes); clear(@mmap_bytes_per_process);
+    clear(@mmap_size_histogram); clear(@mmap_errors);
+    clear(@isr_count); clear(@isr_bh_count); clear(@isr_latency_us);
+    clear(@last_isr_time);
+    clear(@ioctl_sample_rate); clear(@verbose);
 }
 
