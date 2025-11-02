@@ -27,6 +27,7 @@ import (
 type CudaEBPFPolicySpec struct {
 	LibPath      string     `json:"libPath"`
 	Functions    []Function `json:"functions"`
+	Probes       []string   `json:"probes"`
 	Mode         string     `json:"mode"` // "pidwatch" | "systemwide"
 	ProcessRegex string     `json:"processRegex,omitempty"`
 	OutputFormat string     `json:"output,omitempty"` // "ndjson" | "prometheus"

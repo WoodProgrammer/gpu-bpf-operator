@@ -351,26 +351,13 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 }
 
 func (r *CudaEBPFPolicyReconciler) EncodeProbeCalls(policy *gpuv1alpha1.CudaEBPFPolicy) (string, error) {
-	type Function struct {
-		Kind string
-		Name string
-	}
-	tmpArr := []Function{}
-
-	for _, v := range policy.Spec.Functions {
-		fn := Function{
-			Name: v.Name,
-			Kind: v.Kind,
-		}
-
-		tmpArr = append(tmpArr, fn)
-
-	}
-	jsonBytes, err := json.Marshal(tmpArr)
+	jsonBytes, err := json.Marshal(policy.Spec.Probes)
 	if err != nil {
 		return "", err
 	}
+	fmt.Println("The jsonBytes is  ", jsonBytes)
 	sEnc := b64.StdEncoding.EncodeToString([]byte(jsonBytes))
+	fmt.Println("The sEnc is  ", sEnc)
 	return sEnc, nil
 }
 
