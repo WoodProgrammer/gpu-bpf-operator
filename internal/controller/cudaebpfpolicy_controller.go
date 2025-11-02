@@ -230,31 +230,32 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 	// Define volume mounts for eBPF operations
 	volumeMounts := []corev1.VolumeMount{
 		{
-			Name:      "sys-fs-bpf",
-			MountPath: "/sys/fs/bpf",
+			Name:      "lib-modules",
+			MountPath: "/lib/modules",
+		},
+		{
+			Name:      "usr-src",
+			MountPath: "/usr/src",
 		},
 		{
 			Name:      "sys-kernel-debug",
 			MountPath: "/sys/kernel/debug",
 		},
 		{
-			Name:      "sys-kernel-tracing",
-			MountPath: "/sys/kernel/tracing",
+			Name:      "sys-fs-bpf",
+			MountPath: "/sys/fs/bpf",
+			ReadOnly:  true,
 		},
 		{
 			Name:      "proc",
 			MountPath: "/proc",
-		},
-		{
-			Name:      "cuda-lib",
-			MountPath: policy.Spec.LibPath,
 			ReadOnly:  true,
 		},
 	}
 
 	// Define volumes from host paths
 	hostPathDirectory := corev1.HostPathDirectory
-	hostPathFile := corev1.HostPathFile
+	//hostPathFile := corev1.HostPathFile
 	volumes := []corev1.Volume{
 		{
 			Name: "sys-fs-bpf",
@@ -284,11 +285,20 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 			},
 		},
 		{
-			Name: "cuda-lib",
+			Name: "lib-modules",
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
-					Path: policy.Spec.LibPath,
-					Type: &hostPathFile,
+					Path: "/lib/modules",
+					Type: &hostPathDirectory,
+				},
+			},
+		},
+		{
+			Name: "usr-src",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/usr/src",
+					Type: &hostPathDirectory,
 				},
 			},
 		},
