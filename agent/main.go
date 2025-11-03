@@ -6,24 +6,20 @@ import (
 	b64 "encoding/base64"
 	"encoding/json"
 	"errors"
-	"html/template"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
+	"text/template"
 
 	"github.com/rs/zerolog/log"
 )
 
 func main() {
-	LIB_PATH := os.Getenv("LIB_PATH")
-	if len(LIB_PATH) == 0 {
-		err := errors.New("Missing environment variable")
-		log.Fatal().Err(err).Msg("Please environment variable LIB_PATH")
-	}
-	if err := generateBpftraceScript(LIB_PATH); err != nil {
+	if err := generateBpftraceScript(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to generate bpftrace script")
 	}
 
@@ -42,16 +38,13 @@ func main() {
 }
 
 // generateBpftraceScript generates a bpftrace script from a template
-func generateBpftraceScript(libPath string) error {
-	var probes []Probe
+func generateBpftraceScript() error {
+	var probes []string
 	templateData := TemplateProbeLib{
 		ProbeLib: []string{},
-		LibPath:  libPath,
 	}
-
 	log.Info().Msg("Generating bpftrace script from template...")
 	probeEnv := os.Getenv("PROBE_CALLS")
-
 	if len(probeEnv) == 0 {
 		err := errors.New("missing environment variable PROBE_CALLS")
 		log.Err(err).Msg("Please set PROBE_CALLS environment variable")
@@ -59,11 +52,11 @@ func generateBpftraceScript(libPath string) error {
 	}
 	sDec, _ := b64.StdEncoding.DecodeString(probeEnv)
 	if err := json.Unmarshal([]byte(sDec), &probes); err != nil {
-		log.Err(err).Msg("ERror ")
+		log.Err(err).Msg("Error while running json.Unmarshal() ")
 	}
 	// Access the parsed data
 	for _, p := range probes {
-		templateData.ProbeLib = append(templateData.ProbeLib, p.Name)
+		templateData.ProbeLib = append(templateData.ProbeLib, p)
 	}
 
 	// Create template function map
@@ -79,10 +72,11 @@ func generateBpftraceScript(libPath string) error {
 	}
 
 	// Parse template
-	tmpl, err := template.New("cuda_events.bt.tmpl").Funcs(funcMap).ParseFiles(TEMPLATE_FILE_PATH)
+	tmpl, err := template.New("nvidia_events.bt.tmpl").Funcs(funcMap).ParseFiles(TEMPLATE_FILE_PATH)
 	if err != nil {
 		return err
 	}
+	fmt.Println(tmpl)
 
 	// Create output file
 	f, err := os.Create(BT_FILE_PATH)

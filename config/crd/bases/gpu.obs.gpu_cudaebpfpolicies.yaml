@@ -71,6 +71,10 @@ spec:
                 type: string
               output:
                 type: string
+              probes:
+                items:
+                  type: string
+                type: array
               processRegex:
                 type: string
             required:
@@ -78,6 +82,7 @@ spec:
             - image
             - libPath
             - mode
+            - probes
             type: object
           status:
             description: CudaEBPFPolicyStatus defines the observed state of CudaEBPFPolicy.

@@ -1,13 +1,17 @@
 apiVersion: gpu.obs.gpu/v1alpha1
 kind: CudaEBPFPolicy
 metadata:
-  name: cuda-trace-basic
+  name: cuda-trace-basic-ops-hede
 spec:
   libPath: "/usr/lib/x86_64-linux-gnu/libcudart.so"
-  image: ""
+  image: "emirozbir/gpu-bpf-operator-agent:latest"
+  probes:
+  - "nvidia_open"
+  - "nvidia_unlocked_ioctl"
+  - "anan"
   functions:
-    - name: "cudaStreamCreate"
-      kind: "uprobe"
-    - name: "cudaStreamSynchronize"
-      kind: "uprobe"
+    - name: "nvidia_open"
+      kind: "kprobe"
+    - name: "nvidia_unlocked_ioctl"
+      kind: "kprobe"
   mode: "pidwatch"

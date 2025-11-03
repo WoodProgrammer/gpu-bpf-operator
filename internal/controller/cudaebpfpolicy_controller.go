@@ -230,31 +230,32 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 	// Define volume mounts for eBPF operations
 	volumeMounts := []corev1.VolumeMount{
 		{
-			Name:      "sys-fs-bpf",
-			MountPath: "/sys/fs/bpf",
+			Name:      "lib-modules",
+			MountPath: "/lib/modules",
+		},
+		{
+			Name:      "usr-src",
+			MountPath: "/usr/src",
 		},
 		{
 			Name:      "sys-kernel-debug",
 			MountPath: "/sys/kernel/debug",
 		},
 		{
-			Name:      "sys-kernel-tracing",
-			MountPath: "/sys/kernel/tracing",
+			Name:      "sys-fs-bpf",
+			MountPath: "/sys/fs/bpf",
+			ReadOnly:  true,
 		},
 		{
 			Name:      "proc",
 			MountPath: "/proc",
-		},
-		{
-			Name:      "cuda-lib",
-			MountPath: policy.Spec.LibPath,
 			ReadOnly:  true,
 		},
 	}
 
 	// Define volumes from host paths
 	hostPathDirectory := corev1.HostPathDirectory
-	hostPathFile := corev1.HostPathFile
+	//hostPathFile := corev1.HostPathFile
 	volumes := []corev1.Volume{
 		{
 			Name: "sys-fs-bpf",
@@ -284,11 +285,20 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 			},
 		},
 		{
-			Name: "cuda-lib",
+			Name: "lib-modules",
 			VolumeSource: corev1.VolumeSource{
 				HostPath: &corev1.HostPathVolumeSource{
-					Path: policy.Spec.LibPath,
-					Type: &hostPathFile,
+					Path: "/lib/modules",
+					Type: &hostPathDirectory,
+				},
+			},
+		},
+		{
+			Name: "usr-src",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/usr/src",
+					Type: &hostPathDirectory,
 				},
 			},
 		},
@@ -341,26 +351,13 @@ func (r *CudaEBPFPolicyReconciler) createDaemonsetProbeAgent(policy *gpuv1alpha1
 }
 
 func (r *CudaEBPFPolicyReconciler) EncodeProbeCalls(policy *gpuv1alpha1.CudaEBPFPolicy) (string, error) {
-	type Function struct {
-		Kind string
-		Name string
-	}
-	tmpArr := []Function{}
-
-	for _, v := range policy.Spec.Functions {
-		fn := Function{
-			Name: v.Name,
-			Kind: v.Kind,
-		}
-
-		tmpArr = append(tmpArr, fn)
-
-	}
-	jsonBytes, err := json.Marshal(tmpArr)
+	jsonBytes, err := json.Marshal(policy.Spec.Probes)
 	if err != nil {
 		return "", err
 	}
+	fmt.Println("The jsonBytes is  ", jsonBytes)
 	sEnc := b64.StdEncoding.EncodeToString([]byte(jsonBytes))
+	fmt.Println("The sEnc is  ", sEnc)
 	return sEnc, nil
 }
 
