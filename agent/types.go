@@ -1,8 +1,9 @@
 package main
 
 const (
-	TEMPLATE_FILE_PATH = "templates/nvidia_events.bt.tmpl"
-	BT_FILE_PATH       = "/tmp/nvidia_events.bt"
+	TEMPLATE_FILE_PATH       = "templates/nvidia_events.bt.tmpl"
+	BT_FILE_PATH             = "/tmp/nvidia_events.bt"
+	ENVIRONMENT_VARIABLE_ERR = "Please fille the environment for "
 )
 
 type TemplateProbeLib struct {

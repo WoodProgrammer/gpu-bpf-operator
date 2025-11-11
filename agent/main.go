@@ -20,30 +20,32 @@ func CreateNewImageLayerHandler() imageLayer.ImageLayerHandler {
 }
 func main() {
 	imageLayerHandler := CreateNewImageLayerHandler()
-
 	imageRef := os.Getenv("IMAGE_REF")
-	outDir := os.Getenv("OUTPUT_DIRECTORY")
 
+	outDir := os.Getenv("OUTPUT_DIRECTORY")
 	if len(imageRef) == 0 || len(outDir) == 0 {
-		err := errors.New("IMAGE_REF or OUTPUT_DIRECTORY is empty")
-		log.Fatal().Err(err).Msg("Please set your IMAGE_REF and OUTPUT_DIRECTORY which contains image registry address and directory to keep the BPF scripts")
+		err := errors.New(ENVIRONMENT_VARIABLE_ERR)
+		log.Fatal().Err(err).Msg("OUTPUT_DIRECTORY IMAGE_REF")
 	}
 
 	err := imageLayerHandler.FetchImageLayers(imageRef, outDir)
 	if err != nil {
 		log.Fatal().Err(err).Msg("error while calling imageLayerHandler.FetchImageLayers()")
 	}
-	// Step 2: Set up context and signal handling
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sigChan := setupSignalHandler()
-
-	// Step 3: Execute the bpftrace script
-	if err := executeBpftraceScript(ctx, sigChan, cancel); err != nil {
-		log.Fatal().Err(err).Msg("Failed to execute bpftrace script")
+	bpfFilePath := os.Getenv("BPF_FILE_PATH")
+	if len(imageRef) == 0 || len(outDir) == 0 {
+		err := errors.New(ENVIRONMENT_VARIABLE_ERR)
+		log.Fatal().Err(err).Msgf("BPF_FILE_PATH")
 	}
 
+	sigChan := setupSignalHandler()
+	if err := executeBpftraceScript(ctx, sigChan, cancel, bpfFilePath); err != nil {
+		log.Fatal().Err(err).Msg("Failed to execute bpftrace script")
+	}
 	log.Info().Msg("Application shutdown complete")
 }
 
@@ -56,9 +58,9 @@ func setupSignalHandler() chan os.Signal {
 }
 
 // executeBpftraceScript executes the bpftrace script and streams output
-func executeBpftraceScript(ctx context.Context, sigChan chan os.Signal, cancel context.CancelFunc) error {
+func executeBpftraceScript(ctx context.Context, sigChan chan os.Signal, cancel context.CancelFunc, bpfFilePath string) error {
 	log.Info().Msg("Starting bpftrace script execution...")
-	cmd := exec.CommandContext(ctx, "/usr/bin/bpftrace", BT_FILE_PATH)
+	cmd := exec.CommandContext(ctx, "/usr/bin/bpftrace", bpfFilePath)
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
