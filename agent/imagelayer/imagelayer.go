@@ -1,12 +1,12 @@
 package imagelayer
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -15,7 +15,7 @@ import (
 
 type ImageLayers interface {
 	FetchImageLayers(imageRef, outDir string) error
-	DownloadImageLayers(ctx context.Context, imageRef, outDir string) error
+	FlattenImage(ctx context.Context, imageRef, outDir string) error
 }
 
 type ImageLayerHandler struct {
@@ -23,29 +23,38 @@ type ImageLayerHandler struct {
 }
 
 func (i *ImageLayerHandler) FetchImageLayers(imageRef, outDir string) error {
-	if err := i.DownloadImageLayers(context.Background(), imageRef, outDir); err != nil {
-		log.Err(err).Msg("error while calling DownloadImageLayers()")
+	outDir = fmt.Sprintf("/tmp/%s.img.zip", imageRef)
+	if err := i.FlattenImage(imageRef, outDir); err != nil {
+		log.Err(err).Msg("error while calling FlattenImage()")
 		return err
 	}
 	log.Info().Msg("Image Layers properly downloaded")
 	return nil
 }
 
-func (i *ImageLayerHandler) DownloadImageLayers(ctx context.Context, imageRef, outDir string) error {
+func (i *ImageLayerHandler) FlattenImage(imageRef, output string) error {
 	ref, err := name.ParseReference(imageRef)
 	if err != nil {
-		log.Err(err).Msg("parse ref error:")
+		log.Err(err).Msg("error while calling name.ParseReference()")
 		return err
 	}
 	img, err := remote.Image(ref)
 	if err != nil {
-		log.Err(err).Msg("pull image")
+		log.Err(err).Msg("error while calling remote.Image()")
 		return err
 	}
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		log.Err(err).Msg("error while calling os.MkdirAll()")
+
+	out, err := os.Create(output)
+	if err != nil {
+		log.Err(err).Msg("error while calling os.Create()")
 		return err
 	}
+	defer out.Close()
+
+	gz := gzip.NewWriter(out)
+	defer gz.Close()
+	tw := tar.NewWriter(gz)
+	defer tw.Close()
 
 	layers, err := img.Layers()
 	if err != nil {
@@ -53,39 +62,33 @@ func (i *ImageLayerHandler) DownloadImageLayers(ctx context.Context, imageRef, o
 		return err
 	}
 
-	for i, layer := range layers {
-		digest, err := layer.Digest()
+	for _, layer := range layers {
+		rc, err := layer.Uncompressed()
 		if err != nil {
-			log.Err(err).Msg("error while calling layer.Digest()")
-			return err
-		}
-		rc, err := layer.Compressed()
-		if err != nil {
-			log.Err(err).Msg("error while calling layer.Compressed()")
+			log.Err(err).Msg("error while calling layer.Uncompressed()")
 			return err
 		}
 		defer rc.Close()
 
-		filename := fmt.Sprintf(
-			"layer-%02d-%s.tar.gz",
-			i,
-			strings.TrimPrefix(digest.String(), "sha256:"),
-		)
-
-		destPath := filepath.Join(outDir, filename)
-		f, err := os.Create(destPath)
-		if err != nil {
-			log.Err(err).Msg("error while calling os.Create()")
-			return err
+		tr := tar.NewReader(rc)
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Err(err).Msg("error during the iteration on layers")
+				return err
+			}
+			if err := tw.WriteHeader(hdr); err != nil {
+				log.Err(err).Msg("error while calling tw.WriteHeader()")
+				return err
+			}
+			if _, err := io.Copy(tw, tr); err != nil {
+				log.Err(err).Msg("error while calling io.Copy()")
+				return err
+			}
 		}
-
-		if _, err := io.Copy(f, rc); err != nil {
-			f.Close()
-			log.Err(err).Msg("error while calling io.Copy()")
-			return err
-		}
-		f.Close()
-		log.Info().Msgf("saved %s\n", destPath)
 	}
 	return nil
 }
