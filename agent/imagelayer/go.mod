@@ -1,20 +1,17 @@
-module gpu-bpf-operator/agent
+module gpu-bpf-operator/agent/imagelayer
 
 go 1.25.2
 
 require (
-	github.com/WoodProgrammer/generic-gpu-operator/imagelayer v0.0.0-00010101000000-000000000000
+	github.com/google/go-containerregistry v0.20.6
 	github.com/rs/zerolog v1.34.0
 )
-
-replace github.com/WoodProgrammer/generic-gpu-operator/imagelayer => ./imagelayer
 
 require (
 	github.com/containerd/stargz-snapshotter/estargz v0.16.3 // indirect
 	github.com/docker/cli v28.2.2+incompatible // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
-	github.com/google/go-containerregistry v0.20.6 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect

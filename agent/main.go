@@ -3,26 +3,36 @@ package main
 import (
 	"bufio"
 	"context"
-	b64 "encoding/base64"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"os/signal"
-	"strings"
 	"syscall"
-	"text/template"
 
+	imageLayer "github.com/WoodProgrammer/generic-gpu-operator/imagelayer"
 	"github.com/rs/zerolog/log"
 )
 
+func CreateNewImageLayerHandler() imageLayer.ImageLayerHandler {
+	return imageLayer.ImageLayerHandler{}
+
+}
 func main() {
-	if err := generateBpftraceScript(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to generate bpftrace script")
+	imageLayerHandler := CreateNewImageLayerHandler()
+
+	imageRef := os.Getenv("IMAGE_REF")
+	outDir := os.Getenv("OUTPUT_DIRECTORY")
+
+	if len(imageRef) == 0 || len(outDir) == 0 {
+		err := errors.New("IMAGE_REF or OUTPUT_DIRECTORY is empty")
+		log.Fatal().Err(err).Msg("Please set your IMAGE_REF and OUTPUT_DIRECTORY which contains image registry address and directory to keep the BPF scripts")
 	}
 
+	err := imageLayerHandler.FetchImageLayers(imageRef, outDir)
+	if err != nil {
+		log.Fatal().Err(err).Msg("error while calling imageLayerHandler.FetchImageLayers()")
+	}
 	// Step 2: Set up context and signal handling
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -35,63 +45,6 @@ func main() {
 	}
 
 	log.Info().Msg("Application shutdown complete")
-}
-
-// generateBpftraceScript generates a bpftrace script from a template
-func generateBpftraceScript() error {
-	var probes []string
-	templateData := TemplateProbeLib{
-		ProbeLib: []string{},
-	}
-	log.Info().Msg("Generating bpftrace script from template...")
-	probeEnv := os.Getenv("PROBE_CALLS")
-	if len(probeEnv) == 0 {
-		err := errors.New("missing environment variable PROBE_CALLS")
-		log.Err(err).Msg("Please set PROBE_CALLS environment variable")
-		return err
-	}
-	sDec, _ := b64.StdEncoding.DecodeString(probeEnv)
-	if err := json.Unmarshal([]byte(sDec), &probes); err != nil {
-		log.Err(err).Msg("Error while running json.Unmarshal() ")
-	}
-	// Access the parsed data
-	for _, p := range probes {
-		templateData.ProbeLib = append(templateData.ProbeLib, p)
-	}
-
-	// Create template function map
-	funcMap := template.FuncMap{
-		"contains": func(needle string, haystack []string) bool {
-			for _, item := range haystack {
-				if strings.EqualFold(item, needle) {
-					return true
-				}
-			}
-			return false
-		},
-	}
-
-	// Parse template
-	tmpl, err := template.New("nvidia_events.bt.tmpl").Funcs(funcMap).ParseFiles(TEMPLATE_FILE_PATH)
-	if err != nil {
-		return err
-	}
-	fmt.Println(tmpl)
-
-	// Create output file
-	f, err := os.Create(BT_FILE_PATH)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// Execute template and write to file
-	if err := tmpl.Execute(f, templateData); err != nil {
-		return err
-	}
-
-	log.Info().Str("path", BT_FILE_PATH).Msg("CUDA Event tracer successfully generated")
-	return nil
 }
 
 // setupSignalHandler configures signal handling for graceful shutdown

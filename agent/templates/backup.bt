@@ -1,0 +1,30 @@
+#!/usr/bin/env bpftrace
+
+BEGIN
+{
+    // (major, minor) -> human label
+    @mig_label[195, 0] = "MIG-0 1g.10gb";
+    @mig_label[195, 1] = "MIG-1 1g.10gb";
+    // extend as needed
+}
+
+kprobe:nvidia_open
+{
+    $inode = (struct inode *)arg0;
+    $dev   = $inode->i_rdev;
+
+    $major = ($dev >> 20) & 0xfff;
+    $minor =  $dev        & 0xfffff;
+
+    if ($major == 195) {
+        $label = @mig_label[$major, $minor];
+
+        printf("%-10llu OPEN %-16s pid=%-6d dev=%3d:%-3d %s\n",
+               elapsed / 1000000,
+               comm,
+               pid,
+               $major,
+               $minor,
+               $label);
+    }
+}
