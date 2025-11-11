@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	imageLayer "github.com/WoodProgrammer/generic-gpu-operator/imagelayer"
@@ -16,7 +17,6 @@ import (
 
 func CreateNewImageLayerHandler() imageLayer.ImageLayerHandler {
 	return imageLayer.ImageLayerHandler{}
-
 }
 func main() {
 	imageLayerHandler := CreateNewImageLayerHandler()
@@ -59,54 +59,65 @@ func setupSignalHandler() chan os.Signal {
 
 // executeBpftraceScript executes the bpftrace script and streams output
 func executeBpftraceScript(ctx context.Context, sigChan chan os.Signal, cancel context.CancelFunc, bpfFilePath string) error {
+	var wg sync.WaitGroup
+	stdArrMap := map[string]io.ReadCloser{
+		"stdout": nil,
+		"stderr": nil,
+	}
+
 	log.Info().Msg("Starting bpftrace script execution...")
 	cmd := exec.CommandContext(ctx, "/usr/bin/bpftrace", bpfFilePath)
+
 	stdoutPipe, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
 	}
+	stdArrMap["stdout"] = stdoutPipe
 
 	stderrPipe, err := cmd.StderrPipe()
 	if err != nil {
 		return err
 	}
-
-	// Start the command
+	stdArrMap["stderr"] = stderrPipe
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 
 	log.Info().Msg("bpftrace script started successfully")
 
-	// Stream outputs concurrently
-	go streamOutput(stdoutPipe, "stdout")
-	go streamOutput(stderrPipe, "stderr")
-
-	// Wait for interrupt signal
-	<-sigChan
-	log.Info().Msg("Received interrupt signal, shutting down bpftrace...")
-	cancel()
-
-	// Wait for the command to finish
-	if err := cmd.Wait(); err != nil {
-		// Ignore "signal: killed" error as it's expected
-		if err.Error() != "signal: killed" {
-			log.Error().Err(err).Msg("Error while waiting for bpftrace to exit")
-			return err
-		}
+	go func() {
+		<-sigChan
+		log.Info().Msg("Received interrupt signal, shutting down bpftrace...")
+		cancel()
+	}()
+	defer cancel()
+	for k, pipe := range stdArrMap {
+		wg.Add(1)
+		go func(source string, r io.Reader) {
+			defer wg.Done()
+			streamOutput(ctx, r, source)
+		}(k, pipe)
 	}
-
+	wg.Wait()
 	log.Info().Msg("bpftrace script stopped successfully")
 	return nil
 }
 
-// streamOutput reads from a pipe line-by-line and logs with source tag
-func streamOutput(pipe io.Reader, source string) {
+func streamOutput(ctx context.Context, pipe io.Reader, source string) {
 	scanner := bufio.NewScanner(pipe)
-	for scanner.Scan() {
-		log.Info().Str("source", source).Msg(scanner.Text())
-	}
-	if err := scanner.Err(); err != nil {
-		log.Error().Err(err).Str("source", source).Msg("Error reading output")
+	scanner.Buffer(make([]byte, 1024), SCAN_BUFF)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			if !scanner.Scan() {
+				if err := scanner.Err(); err != nil {
+					log.Error().Err(err).Str("source", source).Msg("Error reading output")
+				}
+				return
+			}
+			log.Info().Str("source", source).Msg(scanner.Text())
+		}
 	}
 }
