@@ -2,11 +2,14 @@ package imagelayer
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
@@ -16,18 +19,28 @@ import (
 type ImageLayers interface {
 	FetchImageLayers(imageRef, outDir string) error
 	FlattenImage(ctx context.Context, imageRef, outDir string) error
+	UnzipImageLayer(src, dest string) error
 }
 
 type ImageLayerHandler struct {
-	ImageLayer *ImageLayers
+	ImageLayer    *ImageLayers
+	ScriptPathDir string
 }
 
 func (i *ImageLayerHandler) FetchImageLayers(imageRef, outDir string) error {
-	outDir = fmt.Sprintf("/tmp/%s.img.zip", imageRef)
+	outDir = fmt.Sprintf("/tmp/%s.img.%s", imageRef, "img")
 	if err := i.FlattenImage(imageRef, outDir); err != nil {
 		log.Err(err).Msg("error while calling FlattenImage()")
 		return err
 	}
+	srcDir := fmt.Sprintf("/tmp/%s.img.%s", imageRef, "dir")
+	err := i.UnzipImageLayer(outDir, srcDir)
+	if err != nil {
+		log.Err(err).Msg("error while calling i.UnzipImageLayer()")
+		return err
+	}
+	i.ScriptPathDir = srcDir
+
 	log.Info().Msg("Image Layers properly downloaded")
 	return nil
 }
@@ -90,5 +103,74 @@ func (i *ImageLayerHandler) FlattenImage(imageRef, output string) error {
 			}
 		}
 	}
+	return nil
+}
+
+func (i *ImageLayerHandler) UnzipImageLayer(src, dest string) error {
+	r, err := zip.OpenReader(src)
+	if err != nil {
+		log.Err(err).Msg("error while calling zip.OpenReader()")
+		return err
+	}
+	defer func() {
+		if err := r.Close(); err != nil {
+			panic(err)
+		}
+	}()
+
+	os.MkdirAll(dest, 0755)
+	// Closure to address file descriptors issue with all the deferred .Close() methods
+	extractAndWriteFile := func(f *zip.File) error {
+		rc, err := f.Open()
+		if err != nil {
+			log.Err(err).Msg("error while calling f.Open()")
+			return err
+		}
+		defer func() {
+			if err := rc.Close(); err != nil {
+				log.Err(err).Msg("error while calling rc.Close()")
+			}
+		}()
+
+		path := filepath.Join(dest, f.Name)
+
+		// Check for ZipSlip (Directory traversal)
+		if !strings.HasPrefix(path, filepath.Clean(dest)+string(os.PathSeparator)) {
+			log.Err(err).Msgf("illegal file path %s", path)
+			return err
+		}
+
+		if f.FileInfo().IsDir() {
+			os.MkdirAll(path, f.Mode())
+		} else {
+			os.MkdirAll(filepath.Dir(path), f.Mode())
+			f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, f.Mode())
+			if err != nil {
+				log.Err(err).Msg("error while calling os.OpenFile()")
+				return err
+			}
+			defer func() {
+				if err := f.Close(); err != nil {
+					log.Err(err).Msg("error while calling f.Close()")
+				}
+			}()
+
+			_, err = io.Copy(f, rc)
+			if err != nil {
+				log.Err(err).Msg("error while calling io.Copy()")
+				return err
+			}
+		}
+		return nil
+	}
+
+	for _, f := range r.File {
+		err := extractAndWriteFile(f)
+		if err != nil {
+			log.Err(err).Msg("error while calling extractAndWriteFile()")
+			return err
+		}
+	}
+
 	return nil
 }

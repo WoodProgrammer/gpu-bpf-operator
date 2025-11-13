@@ -41,7 +41,7 @@ func main() {
 		err := errors.New(ENVIRONMENT_VARIABLE_ERR)
 		log.Fatal().Err(err).Msgf("BPF_FILE_PATH")
 	}
-
+	bpfFilePath = imageLayerHandler.ScriptPathDir + bpfFilePath
 	sigChan := setupSignalHandler()
 	if err := executeBpftraceScript(ctx, sigChan, cancel, bpfFilePath); err != nil {
 		log.Fatal().Err(err).Msg("Failed to execute bpftrace script")
