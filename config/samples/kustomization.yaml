@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- obs_v1alpha1_bpfprogram.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

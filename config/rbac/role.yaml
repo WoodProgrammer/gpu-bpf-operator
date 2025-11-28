@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - obs.bpfprograms.io
+  resources:
+  - bpfprograms
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - obs.bpfprograms.io
+  resources:
+  - bpfprograms/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - obs.bpfprograms.io
+  resources:
+  - bpfprograms/status
+  verbs:
+  - get
+  - patch
+  - update
